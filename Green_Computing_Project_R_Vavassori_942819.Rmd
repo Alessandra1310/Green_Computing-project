@@ -1,0 +1,1160 @@
+---
+title: "Green_Computing_Project_Vavassori_942819"
+output:
+  word_document: default
+  html_document:
+    df_print: paged
+date: "2026-06-20"
+---
+
+## Importing Libraries
+
+Importing all the necessary libraries:
+
+```{r}
+install.packages("randomForest")
+install.packages("caret")
+install.packages("MLmetrics")
+install.packages("reticulate")
+install.packages("caret")
+
+library(randomForest)
+library(caret)
+library(MLmetrics)
+library(reticulate)
+library(caret)
+```
+
+
+## First Dataset: Neuroblastoma
+
+### Pre-processing
+
+Importing and loading the first dataset on neuroblastoma. Implementing a beginning pre-processing of data by checking: number of rows and columns, types of variables, summary statistics, target distribution, missing values and applying one-hot encoding on the categorical variable "site".
+
+```{r}
+df_neuroblastoma <- read.csv("data_neuroblastoma.csv")
+
+#number of rows and columns
+dim(df_neuroblastoma)
+
+#types of variables
+str(df_neuroblastoma)
+
+#summary statistics
+summary(df_neuroblastoma)
+
+#target distribution
+table(df_neuroblastoma$outcome)
+
+#missing values
+sum(is.na(df_neuroblastoma))
+
+#one-hot encoding on the column 'site'
+df_neuroblastoma <- cbind(
+  df_neuroblastoma,
+  model.matrix(~ site - 1, data = df_neuroblastoma))
+
+#removing original categorical variable
+df_neuroblastoma$site <- NULL
+```
+
+
+### Standard Code
+
+The "standard" version of the code on the first dataset without any application of green strategies is the following:
+
+```{r}
+py_install("codecarbon", pip = TRUE)
+
+codecarbon <- import("codecarbon")
+OfflineEmissionsTracker <- codecarbon$OfflineEmissionsTracker
+
+tracker <- OfflineEmissionsTracker(
+  country_iso_code = "ITA",
+  measure_power_secs = 30,
+    log_level = "error"
+)
+
+suppressMessages({
+  
+  tracker$start()
+
+X <- subset(df_neuroblastoma, select = -outcome)
+y <- df_neuroblastoma$outcome
+
+set.seed(42)
+
+mcc_vector <- c()
+
+start_time <- Sys.time()
+
+for (i in 1:100) {
+  
+  #train-test split
+  index <- createDataPartition(y, p = 0.7, list = FALSE)
+  X_train <- X[index, ]
+  X_test  <- X[-index, ]
+  y_train <- y[index]
+  y_test  <- y[-index]
+  
+  #Random Forest
+  rf_standard <- randomForest(
+    x = X_train,
+    y = as.factor(y_train),
+    ntree = 100,
+    importance = TRUE
+  )
+
+  pred <- predict(rf_standard, X_test)
+
+  #MCC
+  conf_matrix <- table(y_test, pred)
+  TP <- conf_matrix[2,2]
+  TN <- conf_matrix[1,1]
+  FP <- conf_matrix[1,2]
+  FN <- conf_matrix[2,1]
+
+  mcc <- (TP * TN - FP * FN) /
+         sqrt((TP + FP)*(TP + FN)*(TN + FP)*(TN + FN))
+
+  mcc_vector <- c(mcc_vector, mcc)
+}
+
+end_time <- Sys.time()
+
+execution_time <- as.numeric(difftime(end_time, start_time, units = "secs"))
+
+result <- tracker$stop()
+})
+
+#Conversion in grams of Kg of emissions of CO2
+print(result)
+co2_g <- result * 1000
+
+print("The results are the following:")
+
+cat(sprintf("Mean MCC: %.20f\n", mean(mcc_vector)))
+cat(sprintf("Median MCC: %.20f\n", median(mcc_vector)))
+cat(sprintf("Standard deviation MCC: %.20f\n", sd(mcc_vector)))
+cat(sprintf("Minimum MCC: %.20f\n", min(mcc_vector)))
+cat(sprintf("Maximum MCC: %.29f\n\n", max(mcc_vector)))
+cat(sprintf("Execution time: %.20f seconds\n", execution_time))
+cat(sprintf("CO2 emissions (g): %.6f g\n", co2_g))
+```
+
+### Green Code
+
+The "green" version of the code includes changes of the hyperparameters to obtain lower execution time and $CO_2$ emissions:
+
+```{r}
+py_install("codecarbon", pip = TRUE)
+
+codecarbon <- import("codecarbon")
+OfflineEmissionsTracker <- codecarbon$OfflineEmissionsTracker
+
+tracker <- OfflineEmissionsTracker(
+  country_iso_code = "ITA",
+  measure_power_secs = 30,
+    log_level = "error"
+)
+
+suppressMessages({
+  tracker$start()
+  
+  
+X <- subset(df_neuroblastoma, select = -outcome)
+y <- df_neuroblastoma$outcome
+
+set.seed(42)
+
+mcc_vector <- c()
+
+start_time <- Sys.time()
+
+for (i in 1:100) {
+  
+  #train-test split
+  index <- createDataPartition(y, p = 0.7, list = FALSE)
+  X_train <- X[index, ]
+  X_test  <- X[-index, ]
+  y_train <- y[index]
+  y_test  <- y[-index]
+  
+  #Random Forest
+  rf_green <- randomForest(
+    x = X_train,
+    y = as.factor(y_train),
+    ntree = 20,
+    maxnodes = 10,
+    importance = TRUE
+  )
+
+  pred <- predict(rf_green, X_test)
+
+  #MCC
+  conf_matrix <- table(y_test, pred)
+  TP <- conf_matrix[2,2]
+  TN <- conf_matrix[1,1]
+  FP <- conf_matrix[1,2]
+  FN <- conf_matrix[2,1]
+
+  mcc <- (TP * TN - FP * FN) /
+         sqrt((TP + FP)*(TP + FN)*(TN + FP)*(TN + FN))
+
+  mcc_vector <- c(mcc_vector, mcc)
+}
+
+end_time <- Sys.time()
+
+execution_time <- as.numeric(difftime(end_time, start_time, units = "secs"))
+
+result <- tracker$stop()
+
+})
+
+#Conversion in grams of Kg of emissions of CO2
+print(result)
+co2_g <- result * 1000
+
+print("The results are the following:")
+
+cat(sprintf("Mean MCC: %.20f\n", mean(mcc_vector)))
+cat(sprintf("Median MCC: %.20f\n", median(mcc_vector)))
+cat(sprintf("Standard deviation MCC: %.20f\n", sd(mcc_vector)))
+cat(sprintf("Minimum MCC: %.20f\n", min(mcc_vector)))
+cat(sprintf("Maximum MCC: %.29f\n\n", max(mcc_vector)))
+cat(sprintf("Execution time: %.20f seconds\n", execution_time))
+cat(sprintf("CO2 emissions (g): %.6f g\n", co2_g))
+```
+
+
+### Green Code with feature selection by ranking importance
+
+Exclusively for the first dataset it was considered another green strategy called feature selection which is based on the ranking of the most important features and retaining only the first ten.
+However, after testing this strategy, it was evident that, even though energy, $CO_2$ emissions and execution time were lower than the standard model, these changes were actually smaller compared to the ones obtained by applying only the strategy of adjusting the hyperparameters. 
+Consequently, this strategy was discarded and it was not applied on the remaining datasets. Further details are contained in the section of the report "Evaluation of an additional strategy: Feature Selection".
+
+```{r}
+py_install("codecarbon", pip = TRUE)
+
+codecarbon <- import("codecarbon")
+OfflineEmissionsTracker <- codecarbon$OfflineEmissionsTracker
+
+tracker <- OfflineEmissionsTracker(
+  country_iso_code = "ITA",
+  measure_power_secs = 30,
+    log_level = "error"
+)
+
+suppressMessages({
+  tracker$start()
+  
+X <- subset(df_neuroblastoma, select = -outcome)
+y <- df_neuroblastoma$outcome
+
+set.seed(42)
+
+mcc_vector <- c()
+k <- 10
+
+start_time <- Sys.time()
+
+for (i in 1:100) {
+  #train-test split
+  index <- createDataPartition(y, p = 0.7, list = FALSE)
+  X_train <- X[index, ]
+  X_test  <- X[-index, ]
+  y_train <- y[index]
+  y_test  <- y[-index]
+
+  #Feature Selection based on ranking of features
+  selector <- randomForest(
+    x = X_train,
+    y = as.factor(y_train),
+    ntree = 100
+  )
+
+  importance_scores <- importance(selector)
+  feature_ranking <- importance_scores[, 1]
+  feature_names <- rownames(importance_scores)
+  k <- min(k, ncol(X_train))
+
+  top_features <- feature_names[order(feature_ranking, decreasing = TRUE)][1:k]
+
+  X_train_sel <- X_train[, top_features]
+  X_test_sel  <- X_test[, top_features]
+
+  #Random Forest
+  rf_green <- randomForest(
+    x = X_train_sel,
+    y = as.factor(y_train),
+    ntree = 20
+  )
+
+  pred <- predict(rf_green, X_test_sel)
+
+  #MCC
+  conf_matrix <- table(y_test, pred)
+
+  TP <- conf_matrix[2,2]
+  TN <- conf_matrix[1,1]
+  FP <- conf_matrix[1,2]
+  FN <- conf_matrix[2,1]
+
+  mcc <- (TP * TN - FP * FN) /
+         sqrt((TP + FP)*(TP + FN)*(TN + FP)*(TN + FN))
+
+  mcc_vector <- c(mcc_vector, mcc)
+}
+
+end_time <- Sys.time()
+
+execution_time <- as.numeric(difftime(end_time, start_time, units = "secs"))
+
+result <- tracker$stop()
+
+})
+
+#Conversion in grams of Kg of emissions of CO2
+print(result)
+co2_g <- result * 1000
+
+print("The results are the following:")
+
+cat(sprintf("Mean MCC: %.20f\n", mean(mcc_vector)))
+cat(sprintf("Median MCC: %.20f\n", median(mcc_vector)))
+cat(sprintf("Standard deviation MCC: %.20f\n", sd(mcc_vector)))
+cat(sprintf("Minimum MCC: %.20f\n", min(mcc_vector)))
+cat(sprintf("Maximum MCC: %.29f\n\n", max(mcc_vector)))
+cat(sprintf("Execution time: %.20f seconds\n", execution_time))
+cat(sprintf("CO2 emissions (g): %.6f g\n", co2_g))
+```
+
+## Second Dataset: Neuroblastoma
+
+Importing and loading the second dataset on pediatric brain tumor. Implementing a beginning pre-processing of the dataset by checking: number of rows and columns, types of variables, summary statistics, target distribution, missing values and applying one-hot encoding on the categorical variable "operation type".
+
+```{r}
+df_pediatric <- read.csv("dataset_Belgrade2021_pediatric_brain_tumor.csv")
+
+#number of rows and columns
+dim(df_pediatric)
+
+#types of variables
+str(df_pediatric)
+
+#summary statistics
+summary(df_pediatric)
+
+#target distribution
+table(df_pediatric$Status.OS)
+
+#missing values
+sum(is.na(df_pediatric))
+
+#one-hot encoding on the column 'operation type'
+df_pediatric <- cbind(
+  df_pediatric,
+  model.matrix(~ Operation.type - 1, data = df_pediatric))
+
+#removing original categorical variable
+df_neuroblastoma$Operation.type <- NULL
+```
+
+
+### Standard Code
+
+The "standard" version of the code on the second dataset without any application of green strategies is the following:
+
+```{r}
+py_install("codecarbon", pip = TRUE)
+
+codecarbon <- import("codecarbon")
+OfflineEmissionsTracker <- codecarbon$OfflineEmissionsTracker
+
+tracker <- OfflineEmissionsTracker(
+  country_iso_code = "ITA",
+  measure_power_secs = 30,
+    log_level = "error"
+)
+
+suppressMessages({
+  
+  tracker$start()
+
+X <- subset(df_pediatric, select = -Status.OS)
+y <- df_pediatric$Status.OS
+
+set.seed(42)
+
+mcc_vector <- c()
+
+start_time <- Sys.time()
+
+for (i in 1:100) {
+  
+  #train-test split
+  index <- createDataPartition(y, p = 0.7, list = FALSE)
+  X_train <- X[index, ]
+  X_test  <- X[-index, ]
+  y_train <- y[index]
+  y_test  <- y[-index]
+  
+  #Random Forest
+  rf_standard <- randomForest(
+    x = X_train,
+    y = as.factor(y_train),
+    ntree = 100,
+    importance = TRUE
+  )
+
+  pred <- predict(rf_standard, X_test)
+
+  #MCC
+  conf_matrix <- table(y_test, pred)
+  TP <- conf_matrix[2,2]
+  TN <- conf_matrix[1,1]
+  FP <- conf_matrix[1,2]
+  FN <- conf_matrix[2,1]
+
+  mcc <- (TP * TN - FP * FN) /
+         sqrt((TP + FP)*(TP + FN)*(TN + FP)*(TN + FN))
+
+  mcc_vector <- c(mcc_vector, mcc)
+}
+
+end_time <- Sys.time()
+
+execution_time <- as.numeric(difftime(end_time, start_time, units = "secs"))
+
+result <- tracker$stop()
+
+})
+
+#Conversion in grams of Kg of emissions of CO2
+print(result)
+co2_g <- result * 1000
+
+print("The results are the following:")
+
+cat(sprintf("Mean MCC: %.20f\n", mean(mcc_vector)))
+cat(sprintf("Median MCC: %.20f\n", median(mcc_vector)))
+cat(sprintf("Standard deviation MCC: %.20f\n", sd(mcc_vector)))
+cat(sprintf("Minimum MCC: %.20f\n", min(mcc_vector)))
+cat(sprintf("Maximum MCC: %.29f\n\n", max(mcc_vector)))
+cat(sprintf("Execution time: %.20f seconds\n", execution_time))
+cat(sprintf("CO2 emissions (g): %.6f g\n", co2_g))
+```
+
+
+### Green Code
+
+The "green" version of the code includes changes of the hyperparameters to obtain lower execution time and $CO_2$ emissions:
+
+```{r}
+py_install("codecarbon", pip = TRUE)
+
+codecarbon <- import("codecarbon")
+OfflineEmissionsTracker <- codecarbon$OfflineEmissionsTracker
+
+tracker <- OfflineEmissionsTracker(
+  country_iso_code = "ITA",
+  measure_power_secs = 30,
+    log_level = "error"
+)
+
+suppressMessages({
+  tracker$start()
+  
+X <- subset(df_pediatric, select = -Status.OS)
+y <- df_pediatric$Status.OS
+
+set.seed(42)
+
+mcc_vector <- c()
+
+start_time <- Sys.time()
+
+for (i in 1:100) {
+  
+  #train-test split
+  index <- createDataPartition(y, p = 0.7, list = FALSE)
+  X_train <- X[index, ]
+  X_test  <- X[-index, ]
+  y_train <- y[index]
+  y_test  <- y[-index]
+  
+  #Random Forest
+  rf_green <- randomForest(
+    x = X_train,
+    y = as.factor(y_train),
+    ntree = 20,
+    maxnodes = 10,
+    importance = TRUE
+  )
+
+  pred <- predict(rf_green, X_test)
+
+  #MCC
+  conf_matrix <- table(y_test, pred)
+  TP <- conf_matrix[2,2]
+  TN <- conf_matrix[1,1]
+  FP <- conf_matrix[1,2]
+  FN <- conf_matrix[2,1]
+
+  mcc <- (TP * TN - FP * FN) /
+         sqrt((TP + FP)*(TP + FN)*(TN + FP)*(TN + FN))
+
+  mcc_vector <- c(mcc_vector, mcc)
+}
+
+end_time <- Sys.time()
+
+execution_time <- as.numeric(difftime(end_time, start_time, units = "secs"))
+
+result <- tracker$stop()
+
+})
+
+#Conversion in grams of Kg of emissions of CO2
+print(result)
+co2_g <- result * 1000
+
+print("The results are the following:")
+
+cat(sprintf("Mean MCC: %.20f\n", mean(mcc_vector)))
+cat(sprintf("Median MCC: %.20f\n", median(mcc_vector)))
+cat(sprintf("Standard deviation MCC: %.20f\n", sd(mcc_vector)))
+cat(sprintf("Minimum MCC: %.20f\n", min(mcc_vector)))
+cat(sprintf("Maximum MCC: %.29f\n\n", max(mcc_vector)))
+cat(sprintf("Execution time: %.20f seconds\n", execution_time))
+cat(sprintf("CO2 emissions (g): %.6f g\n", co2_g))
+```
+
+
+## Third Dataset: Colorectal cancer
+
+### Pre-processing
+
+Importing and loading the third dataset on colorectal cancer. Implementing a pre-processing analysis of the dataset.
+
+
+```{r}
+df_colcancer <- read.csv("dataset_Taipei2018_colorectal_cancer.csv")
+
+#inspection of unusual values of variables
+print(table(df_colcancer$asa))
+print(table(df_colcancer$cva))
+print(table(df_colcancer$cell_diff))
+print(table(df_colcancer$mucin_type))
+print(table(df_colcancer$signet_ring))
+print(table(df_colcancer$lymphovascularinvasion))
+print(table(df_colcancer$perineural))
+
+#dropping the variable "cea"
+df_colcancer$cea <- NULL
+```
+
+```{r}
+#drop rows
+df_clean <- df_colcancer[
+  df_colcancer$mucin_type != 9 &
+  df_colcancer$cell_diff != 9 &
+  df_colcancer$signet_ring != 9 &
+  df_colcancer$lymphovascularinvasion != 9 &
+  df_colcancer$perineural != 9,]
+df_clean
+```
+
+Since the number of rows with the values of 9 were not so many, the rows which contained these values were dropped from the dataset, passing from 999 rows to 931 rows. It was obtained a new dataset that was renamed "df_clean".
+
+Checking number of rows and columns, types of variables, summary statistics, target distribution and missing values:
+
+```{r}
+#number of rows and columns
+dim(df_clean)
+
+#types of variables
+str(df_clean)
+
+#summary statistics
+summary(df_clean)
+
+#target distribution
+table(df_clean$death)
+
+#missing values
+sum(is.na(df_clean))
+```
+
+### Standard Code
+
+The "standard" version of the code on the third dataset without any application of green strategies is the following:
+
+```{r}
+py_install("codecarbon", pip = TRUE)
+
+codecarbon <- import("codecarbon")
+OfflineEmissionsTracker <- codecarbon$OfflineEmissionsTracker
+
+tracker <- OfflineEmissionsTracker(
+  country_iso_code = "ITA",
+  measure_power_secs = 30,
+    log_level = "error"
+)
+
+suppressMessages({
+  
+  tracker$start()
+
+X <- subset(df_clean, select = -death)
+y <- df_clean$death
+
+set.seed(42)
+
+mcc_vector <- c()
+
+start_time <- Sys.time()
+
+for (i in 1:100) {
+  
+  #train-test split
+  index <- createDataPartition(y, p = 0.7, list = FALSE)
+  X_train <- X[index, ]
+  X_test  <- X[-index, ]
+  y_train <- y[index]
+  y_test  <- y[-index]
+  
+  #Random Forest
+  rf_standard <- randomForest(
+    x = X_train,
+    y = as.factor(y_train),
+    ntree = 100,
+    importance = TRUE
+  )
+
+  pred <- predict(rf_standard, X_test)
+
+  #MCC
+  conf_matrix <- table(y_test, pred)
+  TP <- conf_matrix[2,2]
+  TN <- conf_matrix[1,1]
+  FP <- conf_matrix[1,2]
+  FN <- conf_matrix[2,1]
+
+  mcc <- (TP * TN - FP * FN) /
+         sqrt((TP + FP)*(TP + FN)*(TN + FP)*(TN + FN))
+
+  mcc_vector <- c(mcc_vector, mcc)
+}
+
+end_time <- Sys.time()
+
+execution_time <- as.numeric(difftime(end_time, start_time, units = "secs"))
+
+result <- tracker$stop()
+})
+
+#Conversion in grams of Kg of emissions of CO2
+print(result)
+co2_g <- result * 1000
+
+print("The results are the following:")
+
+cat(sprintf("Mean MCC: %.20f\n", mean(mcc_vector)))
+cat(sprintf("Median MCC: %.20f\n", median(mcc_vector)))
+cat(sprintf("Standard deviation MCC: %.20f\n", sd(mcc_vector)))
+cat(sprintf("Minimum MCC: %.20f\n", min(mcc_vector)))
+cat(sprintf("Maximum MCC: %.29f\n\n", max(mcc_vector)))
+cat(sprintf("Execution time: %.20f seconds\n", execution_time))
+cat(sprintf("CO2 emissions (g): %.6f g\n", co2_g))
+```
+
+### Green Code
+
+The "green" version of the code includes changes of the hyperparameters to obtain lower execution time and $CO_2$ emissions:
+
+```{r}
+py_install("codecarbon", pip = TRUE)
+
+codecarbon <- import("codecarbon")
+OfflineEmissionsTracker <- codecarbon$OfflineEmissionsTracker
+
+tracker <- OfflineEmissionsTracker(
+  country_iso_code = "ITA",
+  measure_power_secs = 30,
+    log_level = "error"
+)
+
+suppressMessages({
+  tracker$start()
+  
+X <- subset(df_clean, select = -death)
+y <- df_clean$death
+
+set.seed(42)
+
+mcc_vector <- c()
+
+start_time <- Sys.time()
+
+for (i in 1:100) {
+  
+  #train-test split
+  index <- createDataPartition(y, p = 0.7, list = FALSE)
+  X_train <- X[index, ]
+  X_test  <- X[-index, ]
+  y_train <- y[index]
+  y_test  <- y[-index]
+  
+  #Random Forest
+  rf_green <- randomForest(
+    x = X_train,
+    y = as.factor(y_train),
+    ntree = 20,
+    maxnodes = 10,
+    importance = TRUE
+  )
+
+  pred <- predict(rf_green, X_test)
+
+  #MCC
+  conf_matrix <- table(y_test, pred)
+  TP <- conf_matrix[2,2]
+  TN <- conf_matrix[1,1]
+  FP <- conf_matrix[1,2]
+  FN <- conf_matrix[2,1]
+
+  mcc <- (TP * TN - FP * FN) /
+         sqrt((TP + FP)*(TP + FN)*(TN + FP)*(TN + FN))
+
+  mcc_vector <- c(mcc_vector, mcc)
+}
+
+end_time <- Sys.time()
+
+execution_time <- as.numeric(difftime(end_time, start_time, units = "secs"))
+
+result <- tracker$stop()
+
+})
+
+#Conversion in grams of Kg of emissions of CO2
+print(result)
+co2_g <- result * 1000
+
+print("The results are the following:")
+
+cat(sprintf("Mean MCC: %.20f\n", mean(mcc_vector)))
+cat(sprintf("Median MCC: %.20f\n", median(mcc_vector)))
+cat(sprintf("Standard deviation MCC: %.20f\n", sd(mcc_vector)))
+cat(sprintf("Minimum MCC: %.20f\n", min(mcc_vector)))
+cat(sprintf("Maximum MCC: %.29f\n\n", max(mcc_vector)))
+cat(sprintf("Execution time: %.20f seconds\n", execution_time))
+cat(sprintf("CO2 emissions (g): %.6f g\n", co2_g))
+```
+
+## Fourth Dataset: Depression Heart Failure
+
+### Pre-processing
+
+Importing and loading the fourth dataset on depression heart failure. Implementing a beginning exploratory analysis of the dataset by checking: number of rows and columns, types of variables, summary statistics, target distribution and missing values.
+
+```{r}
+df_heartfailure <- read.csv("depression_heart_failure.csv")
+names(df_heartfailure)
+
+#rename the target variable
+names(df_heartfailure)[names(df_heartfailure) == "Death..1.Yes..0.No."] <- "Death"
+
+#number of rows and columns
+dim(df_heartfailure)
+
+#types of variables
+str(df_heartfailure)
+
+#summary statistics
+summary(df_heartfailure)
+
+#target distribution
+table(df_heartfailure$Death)
+
+#missing values
+sum(is.na(df_heartfailure))
+```
+
+At the beginning, by keeping the original dataset and training a random forest model, the final value of MCC was incredibly high (around 0.99).
+Therefore, it was computed correlation coefficient between the target variable and the features in order to identify the most correlated ones: the variables "Time.from.HF.to.Death..days." and "Time.from.HF.to.hospitalization..days." were removed.
+
+```{r}
+#compute correlation coefficient between the target variable and the other features
+sort(cor(df_heartfailure$Death, df_heartfailure))
+```
+```{r}
+#removing the variables with the highest correlation with the target
+df_heartfailure$Time.from.HF.to.Death..days. <- NULL
+df_heartfailure$Time.from.HF.to.hospitalization..days. <- NULL
+```
+
+### Standard Code
+
+The "standard" version of the code on the fourth dataset without any application of green strategies is the following:
+
+```{r}
+py_install("codecarbon", pip = TRUE)
+
+codecarbon <- import("codecarbon")
+OfflineEmissionsTracker <- codecarbon$OfflineEmissionsTracker
+
+tracker <- OfflineEmissionsTracker(
+  country_iso_code = "ITA",
+  measure_power_secs = 30,
+    log_level = "error"
+)
+
+suppressMessages({
+  
+  tracker$start()
+
+X <- subset(df_heartfailure, select = -Death)
+y <- df_heartfailure$Death
+
+set.seed(42)
+
+mcc_vector <- c()
+
+start_time <- Sys.time()
+
+for (i in 1:100) {
+  
+  #train-test split
+  index <- createDataPartition(y, p = 0.7, list = FALSE)
+  X_train <- X[index, ]
+  X_test  <- X[-index, ]
+  y_train <- y[index]
+  y_test  <- y[-index]
+  
+  #Random Forest
+  rf_standard <- randomForest(
+    x = X_train,
+    y = as.factor(y_train),
+    ntree = 100,
+    importance = TRUE
+  )
+
+  pred <- predict(rf_standard, X_test)
+
+  #MCC
+  conf_matrix <- table(y_test, pred)
+  TP <- conf_matrix[2,2]
+  TN <- conf_matrix[1,1]
+  FP <- conf_matrix[1,2]
+  FN <- conf_matrix[2,1]
+
+  mcc <- (TP * TN - FP * FN) /
+         sqrt((TP + FP)*(TP + FN)*(TN + FP)*(TN + FN))
+
+  mcc_vector <- c(mcc_vector, mcc)
+}
+
+end_time <- Sys.time()
+
+execution_time <- as.numeric(difftime(end_time, start_time, units = "secs"))
+
+result <- tracker$stop()
+})
+
+#Conversion in grams of Kg of emissions of CO2
+print(result)
+co2_g <- result * 1000
+
+print("The results are the following:")
+
+cat(sprintf("Mean MCC: %.20f\n", mean(mcc_vector)))
+cat(sprintf("Median MCC: %.20f\n", median(mcc_vector)))
+cat(sprintf("Standard deviation MCC: %.20f\n", sd(mcc_vector)))
+cat(sprintf("Minimum MCC: %.20f\n", min(mcc_vector)))
+cat(sprintf("Maximum MCC: %.29f\n\n", max(mcc_vector)))
+cat(sprintf("Execution time: %.20f seconds\n", execution_time))
+cat(sprintf("CO2 emissions (g): %.6f g\n", co2_g))
+```
+
+### Green Code
+
+The "green" version of the code includes changes of the hyperparameters to obtain lower execution time and $CO_2$ emissions:
+
+```{r}
+py_install("codecarbon", pip = TRUE)
+
+codecarbon <- import("codecarbon")
+OfflineEmissionsTracker <- codecarbon$OfflineEmissionsTracker
+
+tracker <- OfflineEmissionsTracker(
+  country_iso_code = "ITA",
+  measure_power_secs = 30,
+    log_level = "error"
+)
+
+suppressMessages({
+  tracker$start()
+  
+X <- subset(df_heartfailure, select = -Death)
+y <- df_heartfailure$Death
+
+set.seed(42)
+
+mcc_vector <- c()
+
+start_time <- Sys.time()
+
+for (i in 1:100) {
+  
+  #train-test split
+  index <- createDataPartition(y, p = 0.7, list = FALSE)
+  X_train <- X[index, ]
+  X_test  <- X[-index, ]
+  y_train <- y[index]
+  y_test  <- y[-index]
+  
+  #Random Forest
+  rf_green <- randomForest(
+    x = X_train,
+    y = as.factor(y_train),
+    ntree = 20,
+    importance = TRUE
+  )
+
+  pred <- predict(rf_green, X_test)
+
+  #MCC
+  conf_matrix <- table(y_test, pred)
+  TP <- conf_matrix[2,2]
+  TN <- conf_matrix[1,1]
+  FP <- conf_matrix[1,2]
+  FN <- conf_matrix[2,1]
+
+  mcc <- (TP * TN - FP * FN) /
+         sqrt((TP + FP)*(TP + FN)*(TN + FP)*(TN + FN))
+
+  mcc_vector <- c(mcc_vector, mcc)
+}
+
+end_time <- Sys.time()
+
+execution_time <- as.numeric(difftime(end_time, start_time, units = "secs"))
+
+result <- tracker$stop()
+
+})
+
+#Conversion in grams of Kg of emissions of CO2
+print(result)
+co2_g <- result * 1000
+
+print("The results are the following:")
+
+cat(sprintf("Mean MCC: %.20f\n", mean(mcc_vector)))
+cat(sprintf("Median MCC: %.20f\n", median(mcc_vector)))
+cat(sprintf("Standard deviation MCC: %.20f\n", sd(mcc_vector)))
+cat(sprintf("Minimum MCC: %.20f\n", min(mcc_vector)))
+cat(sprintf("Maximum MCC: %.29f\n\n", max(mcc_vector)))
+cat(sprintf("Execution time: %.20f seconds\n", execution_time))
+cat(sprintf("CO2 emissions (g): %.6f g\n", co2_g))
+```
+
+
+## Fifth Dataset: Sepsis
+
+### Pre-processing
+
+Importing and loading the fifth dataset on sepsis. Implementing a beginning exploratory analysis of the dataset by checking: number of rows and columns, types of variables, summary statistics, target distribution and missing values.
+
+```{r}
+df_sepsis <- read.csv("journal_Text_Sepsis.csv")
+
+#number of rows and columns
+dim(df_sepsis)
+
+#types of variables
+str(df_sepsis)
+
+#summary statistics
+summary(df_sepsis)
+
+#target distribution
+table(df_sepsis$Mortality)
+
+#missing values
+sum(is.na(df_sepsis))
+```
+
+
+### Standard Code
+
+The "standard" version of the code on the fifth dataset without any application of green strategies is the following:
+
+```{r}
+py_install("codecarbon", pip = TRUE)
+
+codecarbon <- import("codecarbon")
+OfflineEmissionsTracker <- codecarbon$OfflineEmissionsTracker
+
+tracker <- OfflineEmissionsTracker(
+  country_iso_code = "ITA",
+  measure_power_secs = 30,
+    log_level = "error"
+)
+
+suppressMessages({
+  
+  tracker$start()
+
+X <- subset(df_sepsis, select = -Mortality)
+y <- df_sepsis$Mortality
+
+set.seed(42)
+
+mcc_vector <- c()
+
+start_time <- Sys.time()
+
+for (i in 1:100) {
+  
+  #train-test split
+  index <- createDataPartition(y, p = 0.7, list = FALSE)
+  X_train <- X[index, ]
+  X_test  <- X[-index, ]
+  y_train <- y[index]
+  y_test  <- y[-index]
+  
+  #Random Forest
+  rf_standard <- randomForest(
+    x = X_train,
+    y = as.factor(y_train),
+    ntree = 100,
+    importance = TRUE
+  )
+
+  pred <- predict(rf_standard, X_test)
+
+  #MCC
+  conf_matrix <- table(y_test, pred)
+  TP <- conf_matrix[2,2]
+  TN <- conf_matrix[1,1]
+  FP <- conf_matrix[1,2]
+  FN <- conf_matrix[2,1]
+
+  mcc <- (TP * TN - FP * FN) /
+         sqrt((TP + FP)*(TP + FN)*(TN + FP)*(TN + FN))
+
+  mcc_vector <- c(mcc_vector, mcc)
+}
+
+end_time <- Sys.time()
+
+execution_time <- as.numeric(difftime(end_time, start_time, units = "secs"))
+
+result <- tracker$stop()
+})
+
+#Conversion in grams of Kg of emissions of CO2
+print(result)
+co2_g <- result * 1000
+
+print("The results are the following:")
+
+cat(sprintf("Mean MCC: %.20f\n", mean(mcc_vector)))
+cat(sprintf("Median MCC: %.20f\n", median(mcc_vector)))
+cat(sprintf("Standard deviation MCC: %.20f\n", sd(mcc_vector)))
+cat(sprintf("Minimum MCC: %.20f\n", min(mcc_vector)))
+cat(sprintf("Maximum MCC: %.29f\n\n", max(mcc_vector)))
+cat(sprintf("Execution time: %.20f seconds\n", execution_time))
+cat(sprintf("CO2 emissions (g): %.6f g\n", co2_g))
+```
+
+
+
+### Green Code
+
+The "green" version of the code includes changes of the hyperparameters to obtain lower execution time and $CO_2$ emissions:
+
+```{r}
+py_install("codecarbon", pip = TRUE)
+
+codecarbon <- import("codecarbon")
+OfflineEmissionsTracker <- codecarbon$OfflineEmissionsTracker
+
+tracker <- OfflineEmissionsTracker(
+  country_iso_code = "ITA",
+  measure_power_secs = 30,
+    log_level = "error"
+)
+
+suppressMessages({
+  tracker$start()
+  
+X <- subset(df_sepsis, select = -Mortality)
+y <- df_sepsis$Mortality
+
+set.seed(42)
+
+mcc_vector <- c()
+
+start_time <- Sys.time()
+
+for (i in 1:100) {
+  
+  #train-test split
+  index <- createDataPartition(y, p = 0.7, list = FALSE)
+  X_train <- X[index, ]
+  X_test  <- X[-index, ]
+  y_train <- y[index]
+  y_test  <- y[-index]
+  
+  #Random Forest
+  rf_green <- randomForest(
+    x = X_train,
+    y = as.factor(y_train),
+    ntree = 20,
+    maxnodes = 10,
+    importance = TRUE
+  )
+
+  pred <- predict(rf_green, X_test)
+
+  #MCC
+  conf_matrix <- table(y_test, pred)
+  TP <- conf_matrix[2,2]
+  TN <- conf_matrix[1,1]
+  FP <- conf_matrix[1,2]
+  FN <- conf_matrix[2,1]
+
+  mcc <- (TP * TN - FP * FN) /
+         sqrt((TP + FP)*(TP + FN)*(TN + FP)*(TN + FN))
+
+  mcc_vector <- c(mcc_vector, mcc)
+}
+
+end_time <- Sys.time()
+
+execution_time <- as.numeric(difftime(end_time, start_time, units = "secs"))
+
+result <- tracker$stop()
+
+})
+
+#Conversion in grams of Kg of emissions of CO2
+print(result)
+co2_g <- result * 1000
+
+print("The results are the following:")
+
+cat(sprintf("Mean MCC: %.20f\n", mean(mcc_vector)))
+cat(sprintf("Median MCC: %.20f\n", median(mcc_vector)))
+cat(sprintf("Standard deviation MCC: %.20f\n", sd(mcc_vector)))
+cat(sprintf("Minimum MCC: %.20f\n", min(mcc_vector)))
+cat(sprintf("Maximum MCC: %.29f\n\n", max(mcc_vector)))
+cat(sprintf("Execution time: %.20f seconds\n", execution_time))
+cat(sprintf("CO2 emissions (g): %.6f g\n", co2_g))
+```
